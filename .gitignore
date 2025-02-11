@@ -1,0 +1,5 @@
+my_secrets.py
+__pycache__/
+*.pyc
+*.pyo
+*.ipynb_checkpoints/
