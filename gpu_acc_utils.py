@@ -198,7 +198,7 @@ def getPixels_gpu(image, Ud, Vd, s):
         mask = mask[:, :, None]  # Adding a channel dimension (matching ir's shape)
         ir = cp.where(mask, cp.nan, ir)  # For multi-channel data
     else:
-        ir = cp.where(mask, cp.nan, ir)  # For 2D data
+        ir[mask] = cp.nan # For 2D data
 
     return ir
 
@@ -254,3 +254,32 @@ def mergeRectifyFolder_gpu(folder_path, intrinsics, extrinsics, grid_x, grid_y, 
     
     return store
 
+def mergeRectifyLabelsFolder_gpu(folder_path, intrinsics, extrinsics, grid_x, grid_y, grid_z, zarr_store_path):
+    
+    s = grid_x.shape
+
+    Ud, Vd = xyz2DistUV_gpu(intrinsics, extrinsics, grid_x, grid_y, grid_z)
+    Ud = cp.round(Ud).astype(int)
+    Vd = cp.round(Vd).astype(int)
+
+    # Open the Zarr store once before the loop
+    store = zarr.open_group(zarr_store_path, mode='a')
+    
+    for image_name in os.listdir(folder_path):
+        image_path = os.path.join(folder_path, image_name)
+        I = cv2.imread(image_path, cv2.IMREAD_GRAYSCALE)
+        # I = cv2.cvtColor(I, cv2.COLOR_BGR2RGB)
+        
+        I_gpu = cp.asarray(I)
+        
+        ir = getPixels_gpu(I_gpu, Ud, Vd, s)
+        ir = cp.array(ir, dtype=np.uint8)
+        
+        # Create a dataset name by appending 'rectified' to the original image name
+        dataset_name = f"{os.path.splitext(image_name)[0]}_rectified"
+        
+        # Save the ir array to the Zarr store
+        # store.create_dataset(dataset_name, data=ir, compression='zlib')
+        store[dataset_name] = ir.get()
+    
+    return store
