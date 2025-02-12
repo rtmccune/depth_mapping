@@ -3,6 +3,8 @@ import cupy as cp
 import cupyx as cpx
 import time
 import cv2
+import zarr
+import os
 
 from gpu_acc_utils import *
 from cupyx.scipy.interpolate import RegularGridInterpolator as reg_interp
