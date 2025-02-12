@@ -16,7 +16,7 @@ def reshape_grids_gpu(grid_x, grid_y, grid_z):
 
     return xyz
 
-def CIRNangles2R(azimuth, tilt, swing):
+def CIRNangles2R_gpu(azimuth, tilt, swing):
     R = np.empty((3,3))
 
     R[0,0] = -np.cos(azimuth) * np.cos(swing) - np.sin(azimuth) * np.cos(tilt) * np.sin(swing)
@@ -28,8 +28,10 @@ def CIRNangles2R(azimuth, tilt, swing):
     R[2,0] = np.sin(tilt) * np.sin(azimuth)
     R[2,1] = np.sin(tilt) * np.cos(azimuth)
     R[2,2] = -np.cos(tilt)
+    
+    R_gpu = cp.array(R)
 
-    return R
+    return R_gpu
 
 def intrinsicsExtrinsics2P_gpu(intrinsics, extrinsics):
     K = cp.zeros((3,3))
@@ -42,20 +44,18 @@ def intrinsicsExtrinsics2P_gpu(intrinsics, extrinsics):
     azimuth = extrinsics[3]
     tilt = extrinsics[4]
     swing = extrinsics[5]
-    R = CIRNangles2R(azimuth, tilt, swing)
+    R = CIRNangles2R_gpu(azimuth, tilt, swing)
 
     x = extrinsics[0]
     y = extrinsics[1]
     z = extrinsics[2]
     column_vec = cp.array([-x, -y, -z]).reshape(-1, 1)
-    IC = cp.concatenate([np.eye(3), column_vec], axis=1)
+    IC = cp.concatenate([cp.eye(3), column_vec], axis=1)
 
-    P = cp.dot(K, np.dot(R, IC))
+    P = cp.dot(K, cp.dot(R, IC))
     P /= P[2, 3]
-    
-    P_gpu, K_gpu, R_gpu, IC_gpu = cp.array(P), cp.array(K), cp.array(R), cp.array(IC)
 
-    return P_gpu, K_gpu, R_gpu, IC_gpu
+    return P, K, R, IC
 
 def distortUV_gpu(UV, intrinsics):
     NU = intrinsics[0]
@@ -96,8 +96,8 @@ def distortUV_gpu(UV, intrinsics):
     Vd[flag_mask] = 0
 
     # Define corners of the image
-    Um = cp.array([0, 0, NU, NU])
-    Vm = cp.array([0, NV, NV, 0])
+    Um = cp.array([0, 0, NU.item(), NU.item()])
+    Vm = cp.array([0, NV.item(), NV.item(), 0])
 
     # Normalization
     xm = (Um - c0U) / fx
@@ -253,3 +253,4 @@ def mergeRectifyFolder_gpu(folder_path, intrinsics, extrinsics, grid_x, grid_y, 
         store[dataset_name] = ir.get()
     
     return store
+
