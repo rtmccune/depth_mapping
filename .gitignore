@@ -5,4 +5,7 @@ __pycache__/
 *.ipynb_checkpoints/
 data/
 plots/
+generated_grids/
+CB_03_flood_record/
+image_processing/
 zarr/
