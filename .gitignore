@@ -1,5 +1,6 @@
 my_secrets.py
 __pycache__/
+*.DS_Store
 *.pyc
 *.pyo
 *.ipynb_checkpoints/
