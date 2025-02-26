@@ -33,6 +33,38 @@ class DepthMapper:
         labeled_data, num_features = label(labeled_data)
         return labeled_data
 
+    # def extract_contours(self, labeled_data, gpu_label_array):
+    #     unique_ponds = cp.unique(labeled_data)
+    #     unique_ponds = unique_ponds[unique_ponds != 0]  # Exclude background label
+
+    #     pond_contours = {}
+    #     arr = cp.where(gpu_label_array.squeeze() == 1, self.elev_grid, 0)
+
+    #     for pond_id in unique_ponds:
+    #         pond_mask = (cp.asnumpy(labeled_data) == pond_id.item())
+    #         pond_arr = np.where(pond_mask, cp.asnumpy(arr), 0)
+
+    #         contours = find_contours(pond_arr, level=0.5)
+    #         pond_contours[pond_id.item()] = contours
+
+    #     contour_pixels_per_pond = {}
+    #     contour_values_per_pond = {}
+
+    #     for pond_id, contours in pond_contours.items():
+    #         contour_pixels = []
+    #         contour_values = []
+
+    #         for contour in contours:
+    #             for point in contour:
+    #                 y, x = np.round(point).astype(int)
+    #                 if 0 <= x < cp.asnumpy(arr).shape[1] and 0 <= y < cp.asnumpy(arr).shape[0]:
+    #                     contour_pixels.append((x, y))
+    #                     contour_values.append(cp.asnumpy(arr)[y, x])
+
+    #         contour_pixels_per_pond[pond_id] = np.array(contour_pixels)
+    #         contour_values_per_pond[pond_id] = np.array(contour_values)
+
+    #     return contour_pixels_per_pond, contour_values_per_pond
     def extract_contours(self, labeled_data, gpu_label_array):
         unique_ponds = cp.unique(labeled_data)
         unique_ponds = unique_ponds[unique_ponds != 0]  # Exclude background label
@@ -40,31 +72,41 @@ class DepthMapper:
         pond_contours = {}
         arr = cp.where(gpu_label_array.squeeze() == 1, self.elev_grid, 0)
 
+        # Convert to NumPy only once per loop iteration
+        labeled_data_np = cp.asnumpy(labeled_data)
+        arr_np = cp.asnumpy(arr)
+
         for pond_id in unique_ponds:
-            pond_mask = (cp.asnumpy(labeled_data) == pond_id.item())
-            pond_arr = np.where(pond_mask, cp.asnumpy(arr), 0)
+            pond_id_int = int(pond_id.get())  # Convert cupy scalar to Python int
+            pond_mask = (labeled_data_np == pond_id_int)
+            pond_arr = np.where(pond_mask, arr_np, 0)
 
             contours = find_contours(pond_arr, level=0.5)
-            pond_contours[pond_id.item()] = contours
+            pond_contours[pond_id_int] = contours
 
         contour_pixels_per_pond = {}
         contour_values_per_pond = {}
 
         for pond_id, contours in pond_contours.items():
-            contour_pixels = []
-            contour_values = []
+            if not contours:
+                continue  # Skip empty contours
 
-            for contour in contours:
-                for point in contour:
-                    y, x = np.round(point).astype(int)
-                    if 0 <= x < cp.asnumpy(arr).shape[1] and 0 <= y < cp.asnumpy(arr).shape[0]:
-                        contour_pixels.append((x, y))
-                        contour_values.append(cp.asnumpy(arr)[y, x])
+            contour_pixels = np.vstack([
+                np.round(contour).astype(int) for contour in contours
+            ])
 
-            contour_pixels_per_pond[pond_id] = np.array(contour_pixels)
-            contour_values_per_pond[pond_id] = np.array(contour_values)
+            # Ensure indices are within bounds
+            valid_mask = (0 <= contour_pixels[:, 1]) & (contour_pixels[:, 1] < arr_np.shape[1]) & \
+                        (0 <= contour_pixels[:, 0]) & (contour_pixels[:, 0] < arr_np.shape[0])
+
+            contour_pixels = contour_pixels[valid_mask]
+            contour_values = arr_np[contour_pixels[:, 0], contour_pixels[:, 1]]
+
+            contour_pixels_per_pond[pond_id] = contour_pixels
+            contour_values_per_pond[pond_id] = contour_values
 
         return contour_pixels_per_pond, contour_values_per_pond
+
 
     def calculate_depths(self, labeled_data, contour_values_per_pond):
         pond_depths = {}
