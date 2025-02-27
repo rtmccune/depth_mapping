@@ -7,5 +7,6 @@ data/
 plots/
 generated_grids/
 CB_03_flood_record/
+CB03_all_photos/
 image_processing/
 zarr/
