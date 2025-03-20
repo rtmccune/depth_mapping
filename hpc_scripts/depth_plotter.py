@@ -146,6 +146,88 @@ class DepthPlotter:
             return datetimes, max_depths, avg_depths, vs_depths
         else:
             raise FileNotFoundError(f"Zarr store not found: {zarr_store_path}")
+
+    # def plot_depth_map_and_wtr_levels(self, depth_map_zarr_dir, orig_image_rects_zarr_dir, datetimes, 
+    #                                    obs_to_img_matches, vs_depths, plotting_folder, depth_min=0, depth_max=0.25):
+
+    #     if os.path.exists(depth_map_zarr_dir):
+    #         for file_name in sorted(os.listdir(depth_map_zarr_dir)):
+    #             if file_name.endswith('_ponding'):
+                    
+    #                 timestamp = image_processing.image_utils.extract_timestamp(file_name)
+    #                 date = pd.to_datetime(timestamp, utc=True)
+    #                 orig_file_name = None
+    #                 for f in os.listdir(orig_image_rects_zarr_dir):
+    #                     if image_processing.image_utils.extract_timestamp(f) == timestamp:
+    #                         orig_file_name = f
+    #                         break
+                    
+    #                 if orig_file_name is None:
+    #                     print(f"Warning: No matching original image found for {file_name}")
+    #                     continue
+                    
+    #                 orig_zarr_store_path = os.path.join(orig_image_rects_zarr_dir, orig_file_name)
+    #                 orig_img_store = zarr.open(orig_zarr_store_path, mode='r')
+    #                 orig_image = orig_img_store[:]
+                    
+    #                 zarr_store_path = os.path.join(depth_map_zarr_dir, file_name)
+    #                 img_store = zarr.open(zarr_store_path)
+                    
+    #                 depth_map = img_store[:]
+                    
+    #                 print(f"Processing depth map: {file_name}")
+
+    #                 fig = plt.figure(figsize=(12, 12))
+
+    #                 gs = fig.add_gridspec(2, 1, height_ratios=[1.5, 1])
+
+    #                 ax1 = fig.add_subplot(gs[0])
+    #                 ax1.imshow(orig_image, cmap='gray')  # Assuming ir_array is your grayscale image
+    #                 im = ax1.imshow(depth_map, cmap=cmocean.cm.deep, vmin=depth_min, vmax=depth_max)  # Adjust alpha for transparency
+    #                 ax1.scatter(self.virtual_sensor_loc[0][0], self.virtual_sensor_loc[0][1], color=self.sensor_1_color, s=15, marker='v')
+    #                 ax1.scatter(self.virtual_sensor_loc[1][0], self.virtual_sensor_loc[1][1], color=self.sensor_2_color, s=15, marker='s')
+    #                 ax1.scatter(self.virtual_sensor_loc[2][0], self.virtual_sensor_loc[2][1], color=self.sensor_3_color, s=15, marker='d')
+    #                 cbar = plt.colorbar(im, label='Depth')
+    #                 cbar.set_label('Depth (m)')
+    #                 ax1.invert_yaxis()
+    #                 ax1.set_xlabel('X (cm)')
+    #                 ax1.set_ylabel('Y (cm)')
+
+    #                 ax1.text(0.05, 0.95, f'Spatial Extent ($m^2$): {round((np.sum(~np.isnan(depth_map))) * 0.0001 * 10 * 10, 2)}', 
+    #                         transform=ax1.transAxes, 
+    #                         fontsize=12, 
+    #                         verticalalignment='top', 
+    #                         bbox=dict(facecolor='white', alpha=0.8, edgecolor='black'))
+
+    #                 ax3 = fig.add_subplot(gs[1])
+                    
+    #                 ax3.plot(obs_to_img_matches['closest_utc_time'], obs_to_img_matches['water_level'], label='Observed Water Level', color=self.water_level_color)
+
+    #                 ax3.scatter(datetimes, vs_depths[:,2], label='Sensor 1 Depth', marker='d', color=self.sensor_3_color, s=10)
+    #                 ax3.scatter(datetimes, vs_depths[:,0], label='Sensor 2 Depth',  marker='v', color=self.sensor_1_color, s=10)
+    #                 ax3.scatter(datetimes, vs_depths[:,1], label='Sensor 3 Depth', marker='s', color=self.sensor_2_color, s=10)
+                    
+    #                 ax3.axvline(x=date, color='k', linestyle='-', zorder=1)
+    #                 ax3.set_ylim(-0.25,0.75)
+
+    #                 # Axis labels and title
+    #                 ax3.tick_params(axis='x', rotation=45)
+    #                 ax3.set_title('Water Level From Virtual Sensor Locations Over Time')
+    #                 ax3.set_ylabel('Water Depth (m)')
+
+    #                 # Adding gridlines
+    #                 ax3.grid(True)
+
+    #                 # Adding legend outside of the figure bounds
+    #                 ax3.legend(loc='upper right')
+
+    #                 plt.tight_layout()
+                    
+    #                 # Save the figure
+    #                 plt.savefig(os.path.join(plotting_folder, file_name), 
+    #                             bbox_inches='tight', pad_inches=0.1, dpi=300)
+                    
+    #                 plt.close()
     
 
     def plot_depth_map_and_wtr_levels(self, depth_map_zarr_dir, orig_image_rects_zarr_dir, datetimes, 
@@ -254,6 +336,7 @@ class DepthPlotter:
         # Only the master process will list flood event folders
         if rank == 0:
             flood_event_folders = self.list_flood_event_folders()
+            self.preprocess_flood_events()
         else:
             flood_event_folders = None
 
@@ -272,17 +355,17 @@ class DepthPlotter:
 
     def process_single_flood_event(self, flood_event, plotting_dir):
         flood_event_path = os.path.join(self.main_dir, flood_event)
+        
+        datetimes, max_depths, avg_depths, vs_depths = self.load_virtual_sensor_depths(flood_event_path)
+        
+        plotting_folder = os.path.join(flood_event_path, 'plots', plotting_dir)
+        os.makedirs(plotting_folder, exist_ok=True)
+        
         depth_maps_zarr_dir = os.path.join(flood_event_path, 'zarr', 'depth_maps_95th_ponding')
         orig_image_rects_zarr_dir = os.path.join(flood_event_path, 'zarr', 'orig_image_rects')
         
-        if os.path.exists(depth_maps_zarr_dir):
-            datetimes, max_depths, avg_depths, vs_depths = self.load_virtual_sensor_depths(flood_event_path)
-            
-            plotting_folder = os.path.join(flood_event_path, 'plots', plotting_dir)
-            os.makedirs(plotting_folder, exist_ok=True)
-            
-            obs_to_img_matches = pd.read_csv(os.path.join(flood_event_path, 'wtr_lvl_obs_to_image_matches.csv'))
-            obs_to_img_matches['closest_utc_time'] = pd.to_datetime(obs_to_img_matches['closest_utc_time'], utc=True)
-            
-            self.plot_depth_map_and_wtr_levels(depth_maps_zarr_dir, orig_image_rects_zarr_dir, datetimes, obs_to_img_matches, vs_depths, plotting_folder)
+        obs_to_img_matches = pd.read_csv(os.path.join(flood_event_path, 'wtr_lvl_obs_to_image_matches.csv'))
+        obs_to_img_matches['closest_utc_time'] = pd.to_datetime(obs_to_img_matches['closest_utc_time'], utc=True)
+        
+        self.plot_depth_map_and_wtr_levels(depth_maps_zarr_dir, orig_image_rects_zarr_dir, datetimes, obs_to_img_matches, vs_depths, plotting_folder)
 

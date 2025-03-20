@@ -49,9 +49,9 @@ class ImageRectifier:
 
         Args:
             intrinsics (np.ndarray): An 11 element numpy array representing the camera intrinsic parameters,
-                                     including focal lengths and optical center.
+            including focal lengths and optical center.
             extrinsics (np.ndarray): A 6-element numpy array containing the camera extrinsic parameters,
-                                     specifying the rotation and translation of the camera in space.
+            specifying the rotation and translation of the camera in space.
             grid_x (np.ndarray): A 2D numpy array representing the X coordinates of the grid points.
             grid_y (np.ndarray): A 2D numpy array representing the Y coordinates of the grid points.
             grid_z (np.ndarray): A 2D numpy array representing the Z coordinates (elevation) of the grid points.
@@ -84,14 +84,13 @@ class ImageRectifier:
         Args:
             image_path (str): The file path to the image to be loaded.
             labels (bool): A flag indicating whether to load the image in grayscale (True) 
-                           or in color (False). If True, the image will be loaded as a 
-                           single-channel grayscale image; if False, the image will be 
-                           loaded in RGB format.
+            or in color (False). If True, the image will be loaded as a 
+            single-channel grayscale image; if False, the image will be 
+            loaded in RGB format.
 
         Returns:
             np.ndarry or cp.ndarray: The loaded image as a numpy array (if use_gpu is False)
-                                      or as a cupy array (if use_gpu is True).
-                                      
+            or as a cupy array (if use_gpu is True).
         Notes:
             The function uses OpenCV to read the image. If `self.use_gpu` is True, the image 
             is converted to a cupy array for GPU processing. If `labels` is True, the image 
@@ -112,8 +111,8 @@ class ImageRectifier:
 
         Returns:
             np.ndarray or cp.ndarray: A 2D array where each row represents a point in 
-                                      3D space (X, Y, Z). The shape of the array will 
-                                      be (N, 3), where N is the total number of grid points.
+            3D space (X, Y, Z). The shape of the array will 
+            be (N, 3), where N is the total number of grid points.
         
         Notes:
             The function takes the transposed grid arrays for X, Y, and Z coordinates,
@@ -138,7 +137,7 @@ class ImageRectifier:
 
         Args:
             image (np.ndarray or cp.ndarray): The input image from which pixel values are to be extracted. 
-                                              The image can be a 2D (grayscale) or 3D (color) array.
+            The image can be a 2D (grayscale) or 3D (color) array.
 
         Returns:
             np.ndarray or cp.ndarray: A 3D array containing the interpolated pixel values 
@@ -228,8 +227,8 @@ class ImageRectifier:
 
         Returns:
             np.ndarray or cp.ndarray: A 3x3 rotation matrix that represents the orientation 
-                                      in 3D space based on the specified azimuth, tilt, and swing angles.
-                                      
+            in 3D space based on the specified azimuth, tilt, and swing angles.
+            
         Notes:
             The rotation matrix is constructed using the provided angles:
             - Azimuth: The angle of rotation around the vertical axis.
@@ -263,8 +262,8 @@ class ImageRectifier:
 
         Returns:
             np.ndarray or cp.ndarray: A 3x3 camera intrinsic matrix that defines the 
-                                      mapping from 3D world coordinates to 2D image coordinates.
-                                      
+            mapping from 3D world coordinates to 2D image coordinates.
+
         Notes:
             The intrinsic matrix K is constructed using the parameters from the 
             `self.intrinsics` array:
@@ -294,12 +293,12 @@ class ImageRectifier:
 
         Returns:
             np.ndarray or cp.ndarray: A 4x4 camera projection matrix P that combines the intrinsic 
-                                      matrix K and the extrinsic parameters (rotation and translation).
+            matrix K and the extrinsic parameters (rotation and translation).
             np.ndarray or cp.ndarray: The 3x3 intrinsic matrix K.
             np.ndarray or cp.ndarray: The 3x3 rotation matrix R derived from CIRN angles.
             np.ndarray or cp.ndarray: The 4x3 matrix IC that includes the identity matrix and 
-                                      the camera translation vector.
-                                      
+            the camera translation vector.
+
         Notes:
             Output P is normalized for homogenous coordinates. The projection matrix P is constructed as follows:
             - K is the intrinsic matrix built from camera parameters.
@@ -337,15 +336,15 @@ class ImageRectifier:
 
         Args:
             UV (np.ndarray or cp.ndarray): A 2xN array containing UV coordinates, 
-                                           where U is in the first row and V in the second.
+            where U is in the first row and V in the second.
 
         Returns:
             tuple: A tuple containing:
                 - Ud (np.ndarray or cp.ndarray): The distorted U coordinates.
                 - Vd (np.ndarray or cp.ndarray): The distorted V coordinates.
                 - flag (np.ndarray or cp.ndarray): An array indicating which distorted coordinates
-                  exceed the image bounds or are invalid.
-                  
+                exceed the image bounds or are invalid.
+
         Notes:
             The distortion is calculated using radial and tangential distortion models based on 
             the camera's intrinsic parameters. The function applies corrections to the input UV 
@@ -442,8 +441,8 @@ class ImageRectifier:
     
     def xyz_to_dist_UV(self):
         """Computes the distorted UV coordinates (UVd)  that correspond to a set of world xyz points 
-           for given extrinsics and intrinsics. Function also produces a flag variable to indicate 
-           if the UVd point is valid.
+        for given extrinsics and intrinsics. Function also produces a flag variable to indicate 
+        if the UVd point is valid.
 
         Returns:
             tuple: A tuple containing:
@@ -525,14 +524,14 @@ class ImageRectifier:
         Args:
             image_path (str): The path to the image file to be loaded and rectified.
             labels (bool, optional): A flag indicating whether to load the image in grayscale (True) 
-                                     or in color (False). If True, the image will be loaded as a 
-                                     single-channel grayscale image; if False, the image will be 
-                                     loaded in RGB format. Defaults to False.
+                                    or in color (False). If True, the image will be loaded as a 
+                                    single-channel grayscale image; if False, the image will be 
+                                    loaded in RGB format. Defaults to False.
 
         Returns:
             np.ndarray or cp.ndarray: The rectified image as an array of type uint8.
             
-         Notes:
+        Notes:
         This function loads an image from the specified path using the `load_image` method, 
         processes it to obtain rectified pixel values using the `get_pixels` method, 
         and returns the rectified image. The function utilizes CuPy for GPU processing if 
@@ -556,9 +555,9 @@ class ImageRectifier:
             folder_path (str): The path to the folder containing images to be rectified.
             zarr_store_path (str): The path to the Zarr store where rectified images will be saved.
             labels (bool, optional): A flag indicating whether to load the image in grayscale (True) 
-                                     or in color (False). If True, the image will be loaded as a 
-                                     single-channel grayscale image; if False, the image will be 
-                                     loaded in RGB format. Defaults to False.
+                                    or in color (False). If True, the image will be loaded as a 
+                                    single-channel grayscale image; if False, the image will be 
+                                    loaded in RGB format. Defaults to False.
         
         Returns:
             None: The function saves rectified images to the specified Zarr store but does not return any value.
