@@ -3,6 +3,7 @@ import zarr
 import cupy as cp
 import numpy as np
 import pandas as pd
+import matplotlib.pyplot as plt
 from cupyx.scipy.ndimage import label
 from cupyx.scipy.ndimage import binary_closing
 from skimage.measure import find_contours
@@ -19,6 +20,7 @@ class DepthMapper:
         """        
         
         self.elev_grid = elevation_grid
+        # self.pond_edge_elev_plot_dir = pond_edge_elev_plot_dir
 
     def label_ponds(self, gpu_label_array):
         """Labels and processes pond regions in a binary mask.
@@ -59,7 +61,7 @@ class DepthMapper:
         return labeled_data
 
     def extract_contours(self, labeled_data, gpu_label_array):
-        """Extracts contour pixels and their label values for each pond.
+        """Extracts contour pixels and their elevation values for each pond.
 
         This function identifies contours around labeled pond regions, extracts their pixel coordinates, 
         and retrieves corresponding label values.
@@ -72,7 +74,7 @@ class DepthMapper:
         Returns:
             tuple[dict[int, np.ndarray], dict[int, np.ndarray]]: 
                 - A dictionary mapping each pond ID to an array of its contour pixel coordinates (Nx2).
-                - A dictionary mapping each pond ID to an array of label values at contour pixels.`
+                - A dictionary mapping each pond ID to an array of elevation values at contour pixels.`
         """        
         unique_ponds = cp.unique(labeled_data)
         unique_ponds = unique_ponds[unique_ponds != 0]  # Exclude background label
@@ -154,6 +156,90 @@ class DepthMapper:
 
         return pond_depths
 
+    def plot_pond_edge_elevations(self, labeled_data, contour_values_per_pond, pond_edge_elev_plot_dir, file_name):
+
+        all_pond_dir = os.path.join(pond_edge_elev_plot_dir, 'all_ponds')
+        ind_pond_dir = os.path.join(pond_edge_elev_plot_dir, 'ind_ponds')
+        os.makedirs(all_pond_dir, exist_ok=True)
+        os.makedirs(ind_pond_dir, exist_ok=True)
+        
+        edge_elevs = [] # initialize pond depth dictionary
+
+        unique_pond_ids = cp.unique(labeled_data) # array of unique pond labels
+        
+        bins = np.linspace(0, 2, 51)
+        
+        for pond_id in unique_pond_ids:
+            if pond_id == 0:  # Skip background
+                continue
+            
+            pond_edge_elevs = cp.array(contour_values_per_pond[pond_id.item()])
+            
+            # edge_elevs[pond_id.item()] = pond_edge_elevs
+            edge_elevs.append(pond_edge_elevs.get())
+            
+            # Compute statistics
+            mean_val = np.mean(pond_edge_elevs)
+            median_val = np.median(pond_edge_elevs)
+            percentile_95 = np.percentile(pond_edge_elevs, 95)
+            
+            # Plot histogram
+            plt.figure(figsize=(8, 6))
+            plt.hist(pond_edge_elevs.get(), bins=bins, color='lightblue', edgecolor='black', alpha=0.7)
+
+            # Overlay vertical lines for statistics
+            plt.axvline(mean_val.get(), color='red', linestyle='dashed', linewidth=2, label=f'Mean: {mean_val:.2f}')
+            plt.axvline(median_val.get(), color='green', linestyle='solid', linewidth=2, label=f'Median: {median_val:.2f}')
+            plt.axvline(percentile_95.get(), color='purple', linestyle='dashdot', linewidth=2, label=f'95th %ile: {percentile_95:.2f}')
+
+            plt.xlim(0, 2)
+            
+            # Labels and legend
+            plt.xlabel('Elevation')
+            plt.ylabel('Frequency')
+            plt.title(f'Elevation Histogram for Pond {pond_id}')
+            plt.legend()
+            plt.grid(True, linestyle='--', alpha=0.6)
+
+            # Show plot
+            plt.savefig(f'{ind_pond_dir}/{file_name}_Pond_{pond_id}')
+            plt.close()
+        
+        if not edge_elevs:
+            print(f"No pond edge elevations found for {file_name}. Skipping combined histogram.")
+            return  # Exit the function early
+        
+        all_edge_elevs = np.concatenate(edge_elevs)
+        
+        # Plot histogram for all ponds combined
+        plt.figure(figsize=(8, 6))
+        plt.hist(all_edge_elevs, bins=bins, color='lightcoral', edgecolor='black', alpha=0.7)
+
+        # Compute global statistics
+        mean_all = np.mean(all_edge_elevs)
+        median_all = np.median(all_edge_elevs)
+        percentile_95_all = np.percentile(all_edge_elevs, 95)
+
+        # Overlay vertical lines for statistics
+        plt.axvline(mean_all, color='red', linestyle='dashed', linewidth=2, label=f'Mean: {mean_all:.2f}')
+        plt.axvline(median_all, color='green', linestyle='solid', linewidth=2, label=f'Median: {median_all:.2f}')
+        plt.axvline(percentile_95_all, color='purple', linestyle='dashdot', linewidth=2, label=f'95th %ile: {percentile_95_all:.2f}')
+
+        plt.xlim(0, 2)
+        
+        # Labels and legend
+        plt.xlabel('Elevation')
+        plt.ylabel('Frequency')
+        plt.title('Elevation Histogram - All Ponds Combined')
+        plt.legend()
+        plt.grid(True, linestyle='--', alpha=0.6)
+
+        # Save the combined histogram
+        plt.savefig(f'{all_pond_dir}/{file_name}_All_Ponds_Histogram')
+        plt.close()
+
+        return None
+
     def combine_depth_maps(self, pond_depths):
         """Combines multiple pond depth maps into a single depth map.
 
@@ -176,7 +262,7 @@ class DepthMapper:
         
         return combined_depth_map
     
-    def process_file(self, zarr_store_path, file_name):
+    def process_file(self, zarr_store_path, file_name, pond_edge_elev_plot_dir):
         """Processes a Zarr store containing rectified labeled image data and computes depth maps.
 
         Args:
@@ -197,6 +283,7 @@ class DepthMapper:
 
         contour_pixels_per_pond, contour_values_per_pond = self.extract_contours(labeled_data, gpu_label_array) # extract elevations of pond edges
 
+        self.plot_pond_edge_elevations(labeled_data, contour_values_per_pond, pond_edge_elev_plot_dir, file_name)
         pond_depths = self.calculate_depths(labeled_data, contour_values_per_pond) # calculate depths based on extracted edge elevations
 
         combined_depth_map = self.combine_depth_maps(pond_depths) # combine separate ponds depth maps into one map
@@ -206,7 +293,7 @@ class DepthMapper:
         })
         return depth_data
     
-    def process_depth_maps(self, labels_zarr_dir, depth_map_zarr_dir):
+    def process_depth_maps(self, labels_zarr_dir, depth_map_zarr_dir, pond_edge_elev_plot_dir):
         """Creates and saves depth maps as zarr arrays at the provided destination,
             given the zarr direcotry containing rectified labels.
 
@@ -217,7 +304,7 @@ class DepthMapper:
         for file_name in os.listdir(labels_zarr_dir): # for each rectified label array
             if file_name.endswith('_rectified'): # confirm that it has been rectified
                 rectified_label_array = os.path.join(labels_zarr_dir, file_name) # combine file path
-                depth_data = self.process_file(rectified_label_array, file_name) # generate depth map
+                depth_data = self.process_file(rectified_label_array, file_name, pond_edge_elev_plot_dir) # generate depth map
                 
                 depth_maps = pd.DataFrame(depth_data) # create dataframe from dictionary output
                 
