@@ -23,6 +23,40 @@ def extract_timestamp(filename):
     return match.group(0) if match else None
 
 def organize_images_by_flood_events(image_folder, csv_file, destination_folder, subfolder_name):
+    """
+    Organizes images into folders based on flood event time ranges and camera IDs from a CSV file.
+
+    Parameters:
+    ----------
+    image_folder : str
+        Path to the directory containing the original images.
+
+    csv_file : str
+        Path to the CSV file that defines flood event time ranges and associated sensor IDs.
+        The CSV must contain the following columns:
+        - 'sensor_ID' : The ID of the sensor (without 'CAM_' prefix).
+        - 'start_time_UTC' : The start time of the flood event in UTC.
+        - 'end_time_UTC' : The end time of the flood event in UTC.
+
+    destination_folder : str
+        Path where the organized folders should be created.
+
+    subfolder_name : str
+        Name of the subfolder inside each event folder to store the corresponding images (e.g., "orig_images").
+
+    Behavior:
+    --------
+    For each row in the CSV, the function:
+    - Creates a folder named `{sensor_ID}_{start_time}_{end_time}`.
+    - Moves all images from `image_folder` whose extracted timestamps fall within the flood event's time range
+      and whose extracted camera name matches the `sensor_ID` (with 'CAM_' prefix) into the specified subfolder.
+
+    Notes:
+    -----
+    This function relies on two helper functions:
+    - `extract_timestamp(filename)` : Extracts and returns a UTC timestamp from the filename.
+    - `extract_camera_name(filename)` : Extracts and returns the camera ID (with 'CAM_' prefix) from the filename.
+    """
     # Read the CSV file
     df = pd.read_csv(csv_file)
 
@@ -104,28 +138,91 @@ def orig_rgb_to_gray_labels(rgb_image, color_map, use_gpu):
     return labels_image
 
 def process_image(predictions_dir, labels_destination, orig_rgb_dict, prediction_list, use_gpu):
-        preds_path = os.path.join(predictions_dir, prediction_list)
-        preds_image = cv2.imread(preds_path)
+    """
+    Processes a single predicted segmentation image by converting it from RGB color classes 
+    to a grayscale integer label image based on a provided color map.
 
-        # Convert image to RGB
-        preds_image_rgb = cv2.cvtColor(preds_image, cv2.COLOR_BGR2RGB)
+    Parameters:
+    ----------
+    predictions_dir : str
+        Path to the directory containing the input predicted segmentation image.
 
-        # Convert the RGB image into integer labels
-        gray_img = orig_rgb_to_gray_labels(preds_image_rgb, orig_rgb_dict, use_gpu)
+    labels_destination : str
+        Path to the directory where the output grayscale label image will be saved (CPU mode only).
 
-        if use_gpu:
-            return gray_img
+    orig_rgb_dict : dict
+        Dictionary mapping integer class labels to RGB tuples. Used to translate RGB pixels into class labels.
 
-        else: 
-            file_root, _ = os.path.splitext(prediction_list)
+    prediction_list : str
+        Filename of the prediction image to be processed.
 
-            # Create the new filename with the label appended
-            label_image_name = f"{file_root}_labels.png"
-            label_image_path = os.path.join(labels_destination, label_image_name)
-            
-            cv2.imwrite(label_image_path, gray_img)
+    use_gpu : bool
+        If True, processes the image using GPU acceleration via CuPy and returns the result.
+        If False, processes on CPU and writes the grayscale image to disk.
+
+    Returns:
+    -------
+    gray_img : np.ndarray or cp.ndarray
+        The grayscale label image where each pixel value corresponds to a class label.
+        - If `use_gpu` is True, returns a CuPy array.
+        - If `use_gpu` is False, writes the image to disk and returns nothing.
+    """
+    preds_path = os.path.join(predictions_dir, prediction_list)
+    preds_image = cv2.imread(preds_path)
+
+    # Convert image to RGB
+    preds_image_rgb = cv2.cvtColor(preds_image, cv2.COLOR_BGR2RGB)
+
+    # Convert the RGB image into integer labels
+    gray_img = orig_rgb_to_gray_labels(preds_image_rgb, orig_rgb_dict, use_gpu)
+
+    if use_gpu:
+        return gray_img
+
+    else: 
+        file_root, _ = os.path.splitext(prediction_list)
+
+        # Create the new filename with the label appended
+        label_image_name = f"{file_root}_labels.png"
+        label_image_path = os.path.join(labels_destination, label_image_name)
+        
+        cv2.imwrite(label_image_path, gray_img)
 
 def create_labels_from_predsegs(predictions_dir, labels_destination, color_map=None, use_gpu=False, batch_size=20):
+    """
+    Converts predicted segmentation images into integer-labeled grayscale label maps and saves them to disk.
+
+    Parameters:
+    ----------
+    predictions_dir : str
+        Path to the directory containing predicted segmentation images (color-based classification).
+
+    labels_destination : str
+        Path to the directory where grayscale label images will be saved. Directory will be created if it doesn't exist.
+
+    color_map : dict, optional
+        A dictionary mapping original RGB hex color codes (as strings) to output hex values. 
+        If None, a default color map similar to Plotly's qualitative G10 scheme will be used.
+
+    use_gpu : bool, default=False
+        If True, processes images using CuPy on the GPU for faster performance (recommended for large datasets).
+        If False, processes images on the CPU using multithreading.
+
+    batch_size : int, default=20
+        Number of images to process in a single batch when using GPU mode.
+
+    Returns:
+    -------
+    None
+        This function saves grayscale label images to the specified directory and does not return a value.
+
+    Notes:
+    -----
+    - Predicted segmentation images are assumed to use specific RGB colors to denote classes.
+    - Each unique color in the color map is assigned an integer label starting from 1 (0 is reserved for background).
+    - The output grayscale label images have the same spatial resolution as the input predictions.
+    - When using the GPU, image batches are loaded into memory and processed with CuPy for speed.
+    """
     # Check if the directory exists
     os.makedirs(labels_destination, exist_ok=True)
 

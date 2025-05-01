@@ -157,7 +157,30 @@ class DepthMapper:
         return pond_depths
 
     def plot_pond_edge_elevations(self, labeled_data, contour_values_per_pond, pond_edge_elev_plot_dir, file_name):
+        """
+        Plots and saves histograms of edge elevations for individual ponds and all ponds combined.
 
+        Args:
+            labeled_data : cp.ndarray
+                A CuPy array containing labeled pond segmentation data. Each unique non-zero value represents a different pond.
+            
+            contour_values_per_pond : dict
+                A dictionary mapping pond IDs (integers) to CuPy arrays of edge elevation values for each pond.
+
+            pond_edge_elev_plot_dir : str
+                Path to the directory where the output plots will be saved. Subdirectories for individual and combined pond plots will be created.
+
+            file_name : str
+                Base filename used for saving the plots.
+
+        Returns:
+            None
+                This method saves plots to disk and does not return any values.
+        
+        Notes:
+        - Individual pond elevation histograms include vertical lines for the mean, median, and 95th percentile values.
+        - If no ponds are found (i.e., `edge_elevs` is empty), the method exits early without creating a combined plot.
+        """
         all_pond_dir = os.path.join(pond_edge_elev_plot_dir, 'all_ponds')
         ind_pond_dir = os.path.join(pond_edge_elev_plot_dir, 'ind_ponds')
         os.makedirs(all_pond_dir, exist_ok=True)
