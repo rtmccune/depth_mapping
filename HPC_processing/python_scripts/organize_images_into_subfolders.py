@@ -1,6 +1,5 @@
 import image_processing
 
-
 orig_images_folder = "/rsstu/users/k/kanarde/NASA-Sunnyverse/rmccune/depth_mapping/data/CB_03_flood_events/orig_images"
 labels_folder = "/rsstu/users/k/kanarde/NASA-Sunnyverse/rmccune/depth_mapping/data/CB_03_flood_events/labels"
 

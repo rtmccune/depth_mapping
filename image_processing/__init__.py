@@ -4,6 +4,7 @@ from .depth_mapper import DepthMapper
 from .depth_plotter import DepthPlotter
 import image_processing.plotting_utils as plotting_utils
 import image_processing.image_utils as image_utils
+import image_processing.photo_utils as photo_utils
 
 __all__ = [
     "GridGenerator",
@@ -12,4 +13,5 @@ __all__ = [
     "DepthPlotter",
     "plotting_utils",
     "image_utils",
+    "photo_utils"
 ]

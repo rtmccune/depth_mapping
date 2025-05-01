@@ -29,7 +29,7 @@ subfolders = [
     if os.path.isdir(os.path.join(main_directory, f))
 ]
 
-mapper = image_processing.depth_mapper.DepthMapper(grid_z_gpu)
+mapper = image_processing.DepthMapper(grid_z_gpu)
 
 # Iterate through each subfolder with a progress bar
 for subfolder in tqdm(subfolders, desc="Processing flood events", unit="event"):
