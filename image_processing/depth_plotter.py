@@ -434,7 +434,7 @@ class DepthPlotter:
                     ax1.text(
                         0.05,
                         0.95,
-                        f"Spatial Extent ($m^2$): {round((np.sum(~np.isnan(depth_map))) * 0.0001 * 10 * 10, 2)}",
+                        f"Spatial Extent ($m^2$): {round((np.sum(~np.isnan(depth_map))) * 0.0025, 2)}",
                         transform=ax1.transAxes,
                         fontsize=12,
                         verticalalignment="top",
