@@ -146,7 +146,7 @@ class DepthMapper:
 
         return contour_pixels_per_pond, contour_values_per_pond
 
-    def calculate_depths(self, labeled_data, contour_values_per_pond):
+    def calculate_depths(self, labeled_data, contour_values_per_pond, method, output_format):
         """Calculates the depth of each pond based on elevation differences.
 
         Args:
@@ -180,14 +180,37 @@ class DepthMapper:
                 pond_mask, self.elev_grid, cp.nan
             )  # replace any other values not belonging to this pond with NaN
 
-            max_elevation = cp.percentile(
-                cp.array(contour_values_per_pond[pond_id.item()]), 95
-            )  # calculate 95th percentile of edges
-            depth_map = masked_elevations - max_elevation  # calculate depth across pond
-            depth_map[depth_map > 0] = (
-                0  # set depths greater than 0 to 0 to handle edges above 95th percentile
-            )
-            depth_map = cp.abs(depth_map)  # take the absolute value of the depths
+            
+            if method == 'mean':
+                max_elevation = cp.nanmean(
+                    cp.array(contour_values_per_pond[pond_id.item()])
+                )  # calculate mean of edges
+            
+            elif method == 'median':
+                max_elevation = cp.nanmedian(
+                    cp.array(contour_values_per_pond[pond_id.item()])
+                )  # calculate median of edges
+            
+            elif method == '95_perc':
+                max_elevation = cp.percentile(
+                    cp.array(contour_values_per_pond[pond_id.item()]), 95
+                )  # calculate 95th percentile of edges
+                
+            elif method == '90_perc':
+                max_elevation = cp.percentile(
+                    cp.array(contour_values_per_pond[pond_id.item()]), 95
+                )  # calculate 90th percentile of edges
+            
+            if output_format =='wse':
+                depth_map = masked_elevations
+                depth_map[:] = max_elevation
+                
+            elif output_format == 'depth':
+                depth_map = masked_elevations - max_elevation  # calculate depth across pond
+                depth_map[depth_map > 0] = (
+                    0  # set depths greater than 0 to 0 to handle edges above 95th percentile
+                )
+                depth_map = cp.abs(depth_map)  # take the absolute value of the depths
 
             pond_depths[pond_id.item()] = depth_map
 
@@ -400,19 +423,25 @@ class DepthMapper:
         self.plot_pond_edge_elevations(
             labeled_data, contour_values_per_pond, pond_edge_elev_plot_dir, file_name
         )
-        pond_depths = self.calculate_depths(
-            labeled_data, contour_values_per_pond
-        )  # calculate depths based on extracted edge elevations
+        
+        methods = ['mean', '95_perc', '90_perc', 'median']
+        output_formats = ['wse', 'depth']
+        
+        for method in methods:
+            for output_format in output_formats:
+                pond_depths = self.calculate_depths(
+                    labeled_data, contour_values_per_pond, method, output_format
+                )  # calculate depths based on extracted edge elevations
 
-        combined_depth_map = self.combine_depth_maps(
-            pond_depths
-        )  # combine separate ponds depth maps into one map
-        depth_data.append(
-            {
-                "image_name": f"{file_name}_depth_map_95_perc_edge_ponding",
-                "depth_map": combined_depth_map,
-            }
-        )
+                combined_depth_map = self.combine_depth_maps(
+                    pond_depths
+                )  # combine separate ponds depth maps into one map
+                depth_data.append(
+                    {
+                        "image_name": f"{file_name}_{output_format}_map_{method}",
+                        "depth_map": combined_depth_map,
+                    }
+                )
         return depth_data
 
     def process_depth_maps(

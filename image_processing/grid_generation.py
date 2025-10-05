@@ -174,8 +174,8 @@ class GridGenerator:
         grid_z = grid_z.T
 
         # Save the grid arrays to a compressed Zarr files
-        zarr.save(os.path.join(dir, f"grid_x_{resolution}m.zarr"), grid_x)
-        zarr.save(os.path.join(dir, f"grid_y_{resolution}m.zarr"), grid_y)
-        zarr.save(os.path.join(dir, f"grid_z_{resolution}m.zarr"), grid_z)
+        zarr.save(os.path.join(dir, f"{self.filename}_grid_x_{resolution}m.zarr"), grid_x)
+        zarr.save(os.path.join(dir, f"{self.filename}_grid_y_{resolution}m.zarr"), grid_y)
+        zarr.save(os.path.join(dir, f"{self.filename}_grid_z_{resolution}m.zarr"), grid_z)
 
         return grid_x, grid_y, grid_z
