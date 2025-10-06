@@ -494,6 +494,90 @@ class DepthPlotter:
                     del orig_image, depth_map  # Delete large variables
                     gc.collect()  # Force garbage collection
 
+    
+    def plot_flood_from_numpy(depth_array, min_x, max_x, min_y, max_y,
+                                    resolution_m=0.05, bbox_crs='EPSG:32119', output_folder='figures'):
+        """
+        Plots a flood numpy array, correcting for a "bottom-left" array origin by
+        flipping the array vertically before georeferencing.
+
+        Args:
+            numpy_array (np.ndarray): The raw numpy array, assumed to have a (0,0) origin
+                                    at the bottom-left.
+            ... (other args are the same) ...
+        """
+
+        # 1. Build and georeferenced the DataArray.
+        # --- THE CRITICAL FIX BASED ON YOUR INSIGHT ---
+        # Vertically flip the array to convert from a "bottom-left" origin to the
+        # "top-left" origin expected by geospatial raster standards.
+        data_for_xarray = np.flipud(depth_array).astype(float)
+
+        transform = Affine(resolution_m, 0.0, min_x, 0.0, -resolution_m, max_y)
+        da_hmax = xr.DataArray(
+            data=data_for_xarray,
+            dims=["y", "x"],
+            name='flood_depth'
+        )
+        da_hmax.rio.write_crs(bbox_crs, inplace=True)
+        da_hmax.rio.write_transform(transform, inplace=True)
+        da_hmax.rio.write_nodata(np.nan, inplace=True)
+
+        # 2. Reproject the raster to Web Mercator.
+        da_hmax_mercator = da_hmax.rio.reproject(3857)
+
+        # 3. Create the plot axes
+        fig, ax = plt.subplots(figsize=(10, 10))
+
+        # 4. Get the spatial bounds and data from the reprojected raster.
+        minx, miny, maxx, maxy = da_hmax_mercator.rio.bounds()
+        data_to_plot = da_hmax_mercator.to_numpy()
+
+        # 5. Set the axis limits.
+        ax.set_xlim(minx, maxx)
+        ax.set_ylim(miny, maxy)
+
+        # 6. Add the basemap FIRST.
+        ctx.add_basemap(ax, source=ctx.providers.Esri.WorldImagery, zorder=1)
+
+        # 7. Use ax.imshow() to plot the data ON TOP.
+        im = ax.imshow(
+            data_to_plot,
+            extent=(minx, maxx, miny, maxy),
+            cmap=cmocean.cm.dense,
+            vmin=0,
+            vmax=0.25,
+            alpha=0.7,
+            interpolation='none',
+            zorder=10
+        )
+
+        ax.text(
+                0.05,
+                0.95,
+                f"Spatial Extent ($m^2$): {round((np.sum(~np.isnan(depth_array))) * 0.0025, 2)}",
+                transform=ax.transAxes,
+                fontsize=12,
+                verticalalignment="top",
+                bbox=dict(facecolor="white", alpha=0.8, edgecolor="black"),
+            )
+        
+        # 8. Manually create a colorbar.
+        cbar = fig.colorbar(im, ax=ax, shrink=0.6, aspect=30)
+        cbar.set_label('Depth (m)')
+        
+        # 9. Clean up and save
+        png_path = Path(output_folder) / "flood_map_final.png"
+        png_path.parent.mkdir(parents=True, exist_ok=True)
+
+        ax.set_title('')
+        ax.set_axis_off()
+        plt.tight_layout()
+
+        plt.savefig(png_path, dpi=300, bbox_inches='tight', pad_inches=0)
+        plt.close(fig)
+        print(f"Plot created successfully and saved to {png_path}.")
+
     def process_flood_events(self, plotting_dir):
         """
         Processes and generates plots for flood events.

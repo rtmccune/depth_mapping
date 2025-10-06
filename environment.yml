@@ -1,4 +1,4 @@
-name: depth_mapping
+name: dm
 channels:
   - conda-forge
   - defaults

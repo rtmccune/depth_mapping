@@ -198,12 +198,13 @@ class DepthMapper:
                 
             elif method == '90_perc':
                 max_elevation = cp.percentile(
-                    cp.array(contour_values_per_pond[pond_id.item()]), 95
+                    cp.array(contour_values_per_pond[pond_id.item()]), 90
                 )  # calculate 90th percentile of edges
             
-            if output_format =='wse':
-                depth_map = masked_elevations
-                depth_map[:] = max_elevation
+            if output_format == 'wse':
+                # Where pond_mask is True, use max_elevation. Everywhere else, use NaN.
+                # This correctly preserves the NaN background.
+                depth_map = cp.where(pond_mask, max_elevation, cp.nan)
                 
             elif output_format == 'depth':
                 depth_map = masked_elevations - max_elevation  # calculate depth across pond
@@ -371,6 +372,53 @@ class DepthMapper:
 
         return None
 
+    # def combine_depth_maps(self, pond_depths, output_format):
+    #     """Combines multiple pond maps into a single map.
+
+    #     The combination logic depends on the output format:
+    #     - 'wse': Fills NaN values. The first pond to occupy a pixel sets the WSE.
+    #     - 'depth': Sums values. Overlapping pond depths are added together.
+
+    #     Args:
+    #         pond_depths (dict of int -> cupy.ndarray): A dictionary of maps where each
+    #             key is a pond ID and the value is the map for that pond.
+    #         output_format (str): The format of the maps, either 'wse' or 'depth'.
+
+    #     Returns:
+    #         cupy.ndarray: A combined map.
+    #     """
+    #     # Get a list of the map arrays from the dictionary
+    #     maps_to_combine = list(pond_depths.values())
+
+    #     if not maps_to_combine:
+    #         # Return an empty or NaN grid if there are no ponds
+    #         return cp.full_like(self.elev_grid, cp.nan)
+
+    #     # Start with the first map in the list
+    #     combined_map = maps_to_combine[0]
+
+    #     # Iterate through the rest of the maps
+    #     for i in range(1, len(maps_to_combine)):
+    #         current_map = maps_to_combine[i]
+
+    #         if output_format == 'wse':
+    #             # For WSE, fill in the blanks. Where the combined map is NaN,
+    #             # use the value from the current map. Otherwise, keep the existing value.
+    #             combined_map = cp.where(
+    #                 cp.isnan(combined_map),
+    #                 current_map,
+    #                 combined_map
+    #             )
+    #         elif output_format == 'depth':
+    #             # For depth, add the values, treating NaNs as 0 for the sum.
+    #             combined_map = cp.nansum(cp.array([combined_map, current_map]), axis=0)
+    #             # After summing, where both were originally NaN, it will be 0.
+    #             # We need to restore NaN for the background.
+    #             combined_map = cp.where(cp.isnan(maps_to_combine[0]) & cp.isnan(current_map), cp.nan, combined_map)
+
+
+    #     return combined_map
+    
     def combine_depth_maps(self, pond_depths):
         """Combines multiple pond depth maps into a single depth map.
 
