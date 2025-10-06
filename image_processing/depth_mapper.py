@@ -45,7 +45,7 @@ class DepthMapper:
         self.elev_grid = elevation_grid
         # self.pond_edge_elev_plot_dir = pond_edge_elev_plot_dir
 
-    def label_ponds(self, gpu_label_array):
+    def label_ponds(self, gpu_label_array, depth_mask_array=False, depth_mask_path=None):
         """Labels and processes pond regions in a binary mask.
 
         This function takes a binary array indicating pond regions, applies morphological operations
@@ -58,7 +58,17 @@ class DepthMapper:
             cp.ndarray: A labeled CuPy array where each connected pond has a unique integer ID.
         """
         labels_squeezed = gpu_label_array.squeeze()
-        mask = labels_squeezed == 1  # Boolean mask
+        
+        if depth_mask_array==True:
+            depth_mask_np = np.load(depth_mask_path)
+            depth_mask_gpu = cp.asarray(depth_mask_np, dtype=cp.uint8)
+            depth_mask_gpu = depth_mask_gpu.squeeze()
+            
+            mask = labels_squeezed == 1
+            mask = mask * depth_mask_gpu
+        
+        else:
+            mask = labels_squeezed == 1  # Boolean mask
 
         # Create binary mask directly as uint8 (avoids redundant cp.where)
         masked_labels = mask.astype(cp.uint8)
@@ -445,7 +455,8 @@ class DepthMapper:
 
         return combined_depth_map
 
-    def process_file(self, zarr_store_path, file_name, pond_edge_elev_plot_dir):
+    def process_file(self, zarr_store_path, file_name, pond_edge_elev_plot_dir, 
+                    depth_mask_array=False, depth_mask_path=None):
         """Processes a Zarr store containing rectified labeled image data and computes depth maps.
 
         Args:
@@ -462,7 +473,7 @@ class DepthMapper:
         array = img_store[:]  # open image array
 
         gpu_label_array = cp.array(array)  # convert to cupy array for GPU processing
-        labeled_data = self.label_ponds(gpu_label_array)  # separate ponds
+        labeled_data = self.label_ponds(gpu_label_array, depth_mask_array, depth_mask_path)  # separate ponds
 
         contour_pixels_per_pond, contour_values_per_pond = self.extract_contours(
             labeled_data, gpu_label_array
@@ -493,7 +504,8 @@ class DepthMapper:
         return depth_data
 
     def process_depth_maps(
-        self, labels_zarr_dir, depth_map_zarr_dir, pond_edge_elev_plot_dir
+        self, labels_zarr_dir, depth_map_zarr_dir, pond_edge_elev_plot_dir,
+        depth_mask_array=False, depth_mask_path=None
     ):
         """Creates and saves depth maps as zarr arrays at the provided destination,
             given the zarr direcotry containing rectified labels.
@@ -508,7 +520,8 @@ class DepthMapper:
                     labels_zarr_dir, file_name
                 )  # combine file path
                 depth_data = self.process_file(
-                    rectified_label_array, file_name, pond_edge_elev_plot_dir
+                    rectified_label_array, file_name, pond_edge_elev_plot_dir,
+                    depth_mask_array, depth_mask_path
                 )  # generate depth map
 
                 depth_maps = pd.DataFrame(
