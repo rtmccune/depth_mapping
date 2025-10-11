@@ -155,17 +155,17 @@ class DepthPlotter:
         """
 
         depth_maps_zarr_dir = os.path.join(
-            flood_event_path, "zarr", "depth_maps_95th_ponding"
+            flood_event_path, "zarr", "wse_maps_95th_ponding"
         )
         output_zarr_store = os.path.join(
-            flood_event_path, "zarr", "virtual_sensor_depths"
+            flood_event_path, "zarr", "virtual_sensor_wses"
         )
 
         timestamp_list = []
 
         if os.path.exists(depth_maps_zarr_dir):
             file_names = [
-                f for f in os.listdir(depth_maps_zarr_dir) if f.endswith("_ponding")
+                f for f in os.listdir(depth_maps_zarr_dir) if f.endswith("_95_perc")
             ]
             num_files = len(file_names)
 
@@ -190,31 +190,50 @@ class DepthPlotter:
                 for i, (x, y) in enumerate(self.virtual_sensor_loc):
                     vs_depth_array[idx, i] = depth_map[y, x]
 
-            # Convert timestamps to a NumPy array of strings
-            datetimes = np.array(
-                pd.to_datetime(timestamp_list, utc=True).astype(str), dtype="U"
+            # # Convert timestamps to a NumPy array of strings
+            # datetimes = np.array(
+            #     pd.to_datetime(timestamp_list, utc=True).astype(str), dtype="U30"
+            # )
+
+            # # Save to a Zarr store
+            # root = zarr.open_group(
+            #     output_zarr_store, mode="w"
+            # )  # Overwrite existing store
+
+            # root.create_array("timestamps", shape=datetimes.shape, dtype=datetimes.dtype)
+            # root["timestamps"][:] = datetimes  # Assign data
+
+            # root.create_array(
+            #     "max_depths", shape=max_depth_array.shape, dtype=np.float32
+            # )
+            # root["max_depths"][:] = max_depth_array
+
+            # root.create_array(
+            #     "avg_depths", shape=avg_depth_array.shape, dtype=np.float32
+            # )
+            # root["avg_depths"][:] = avg_depth_array
+
+            # root.create_array("vs_depths", shape=vs_depth_array.shape, dtype=np.float32)
+            # root["vs_depths"][:] = vs_depth_array
+            
+            # 1. Create the NumPy array with a specific, hardcoded string dtype.
+            #    A length like 'U30' is safe for standard ISO format datetimes.
+            datetimes_np = np.array(
+                pd.to_datetime(timestamp_list, utc=True).astype(str), dtype="U30"
             )
 
-            # Save to a Zarr store
+            # 2. Open the Zarr store for writing.
             root = zarr.open_group(
                 output_zarr_store, mode="w"
-            )  # Overwrite existing store
-
-            root.create_array("timestamps", shape=datetimes.shape, dtype="U")
-            root["timestamps"][:] = datetimes  # Assign data
-
-            root.create_array(
-                "max_depths", shape=max_depth_array.shape, dtype=np.float32
             )
-            root["max_depths"][:] = max_depth_array
 
-            root.create_array(
-                "avg_depths", shape=avg_depth_array.shape, dtype=np.float32
-            )
-            root["avg_depths"][:] = avg_depth_array
-
-            root.create_array("vs_depths", shape=vs_depth_array.shape, dtype=np.float32)
-            root["vs_depths"][:] = vs_depth_array
+            # 3. Create the Zarr arrays using the 'data' argument.
+            #    This is the simplest and safest way. Zarr will correctly infer
+            #    the shape and dtype from your NumPy arrays.
+            root.create_array("timestamps", data=datetimes_np)
+            root.create_array("max_depths", data=max_depth_array)
+            root.create_array("avg_depths", data=avg_depth_array)
+            root.create_array("vs_depths", data=vs_depth_array)
 
     def preprocess_flood_events(self):
         """
@@ -609,9 +628,9 @@ class DepthPlotter:
         This method handles large datasets by deleting unnecessary variables after each event and performing garbage collection.
         """
 
-        # self.preprocess_flood_events()
-
         flood_event_folders = self.list_flood_event_folders()
+        
+        self.preprocess_flood_events()
 
         for flood_event in tqdm(
             flood_event_folders, desc="Plotting flood events...", unit="event"
@@ -627,7 +646,7 @@ class DepthPlotter:
             os.makedirs(plotting_folder, exist_ok=True)
 
             depth_maps_zarr_dir = os.path.join(
-                flood_event_path, "zarr", "depth_maps_95th_ponding"
+                flood_event_path, "zarr", "wse_maps_95th_ponding"
             )
             orig_image_rects_zarr_dir = os.path.join(
                 flood_event_path, "zarr", "orig_image_rects"
